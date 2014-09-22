@@ -48,6 +48,7 @@ class MyHTMLParser(HTMLParser):
         if tag == 'a':
             for attr in attrs:
                 if attr[0] == 'id' and self.re_ptitle.match(attr[1]):
+                    self.row['job_element_id'] = attr[1]
                     self.isTitle = True
                 if attr[0] == 'id' and attr[1] == 'HRS_APPL_WRK_HRS_LST_NEXT':
                     log = open('log.file', 'a')
@@ -129,6 +130,7 @@ class MyHTMLParser(HTMLParser):
 def main(argv):
     url = 'https://zhr-candidate.shared.utsystem.edu/psp/ZHRPRDCG/EMPLOYEE/HRMS/c/HRS_HRAM.HRS_CE.GBL/?tab=PAPP_GUEST&SiteId=20'
     page_cnt = 0
+    obj_index = 0
     #url = 'https://zhr-candidate.shared.utsystem.edu/psp/ZHRPRDCG/EMPLOYEE/HRMS/c/HRS_HRAM.HRS_CE.GBL/?tab=PAPP_GUEST&SiteId=8'
     cj = CookieJar()
     opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
@@ -147,43 +149,92 @@ def main(argv):
         jls = json.load(jlf)
         jlf.close()
     #Check if the last job is different from the last job that we have saved. If it is then we have new listings. 
+    form_values = {
+        "ICAJAX" : "1",
+        "ICNAVTYPEDROPDOWN" : "0",
+        "ICType" : "Panel",
+        "ICElementNum" : "0",
+        "ICStateNum" : "0",
+        "ICAction" : "",
+        "ICXPos" : "0",
+        "ICYPos" : "0",
+        "ResponsetoDiffFrame" : "-1",
+        "TargetFrameName" : "None",
+        "FacePath" : "None",
+        "ICFocus" : "",
+        "ICSaveWarningFilter" : "0",
+        "ICChanged" : "-1",
+        "ICResubmit" : "0",
+        "ICSID" : parser.data['ICSID'],
+        "ICActionPrompt" : "false",
+        "ICFind" : "",
+        "ICAddCount" : "",
+        "ICAPPCLSDATA" : "",
+        "HRS_CE_JO_EXT_I$hnewpers$0":parser.data['hnewper'],
+        "HRS_APP_SRCHDRV_HRS_APP_KEYWORD" : "",
+        "HRS_APP_SRCHDRV_HRS_POSTED_WTN" : "M",
+        "HRS_APPL_WRK_HRS_OPRNAME" : "",
+        "HRS_APPL_WRK_HRS_OPRPSWD" : "",
+        "SEELCT$chk$0":"N", 
+        "SEELCT$chk$1":"N",
+        "SEELCT$chk$2":"N",
+        "SEELCT$chk$3":"N",
+        "SEELCT$chk$4":"N"
+    }
+
     if jls['data'][0]['date'] != unicode(parser.data['jobs'][0]['date']) or jls['data'][0]['job_id'] != unicode(parser.data['jobs'][0]['job_id']):
+        #Get details for jobs
+        pt_cnt = 0
+        for ind in range(obj_index, len(parser.data['jobs'])):
+            page_cnt = page_cnt + 1
+            form_values['ICStateNum'] = str(page_cnt)
+            form_values['ICAction'] =  'POSTINGTITLE$' + str(pt_cnt)
+            pt_cnt = pt_cnt + 1
+            obj_index = obj_index + 1
+             
+            data = urllib.urlencode(form_values)
+            #print "Referrer: {0}".format(parser.data['posting_page_src'])
+            request = urllib2.Request(url=parser.data['form_action'], data=data)
+            request.add_header('Referer', parser.data['posting_page_src'])
+            request.add_header('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1700.77 Safari/537.36')
+            request.add_header('Content-Type', 'application/x-www-form-urlencoded')
+            request.add_header('Host', 'zhr-candidate.shared.utsystem.edu')
+            request.add_header('Origin', 'https://zhr-candidate.shared.utsystem.edu')
+            request.add_header('Connection', 'keep-alive')
+            request.add_header('Accept','*/*')
+            response = urllib2.urlopen(request)
+            det_html = response.read()
+            tree = ET.fromstring(det_html)
+            fields = tree.findall('FIELD')
+            for field in fields:
+                if field.attrib['id'] == 'win0divPAGECONTAINER':
+                    parser.data['jobs'][ind]['details_html'] = field.text
+                    dets = open(parser.data['jobs'][ind]['job_id'] + '_details.html', 'w')
+                    dets.write(field.text.encode('UTF-8'))
+                    dets.close()
+                   
+
+            page_cnt = page_cnt + 1
+            form_values['ICStateNum'] = str(page_cnt)
+            form_values['ICAction'] = 'HRS_CE_WRK2_HRS_REF_JB_RETURN'
+            data = urllib.urlencode(form_values)
+            #print "Referrer: {0}".format(parser.data['posting_page_src'])
+            request = urllib2.Request(url=parser.data['form_action'], data=data)
+            request.add_header('Referer', parser.data['posting_page_src'])
+            request.add_header('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1700.77 Safari/537.36')
+            request.add_header('Content-Type', 'application/x-www-form-urlencoded')
+            request.add_header('Host', 'zhr-candidate.shared.utsystem.edu')
+            request.add_header('Origin', 'https://zhr-candidate.shared.utsystem.edu')
+            request.add_header('Connection', 'keep-alive')
+            request.add_header('Accept','*/*')
+            response = urllib2.urlopen(request)
+    
         #Check if the Next link is available, if it is then we need to retrieve the rest of the listings. 
         while(parser.hasNext):
             #print "Going to NExt using {0}".format(parser.data['form_action'])
             page_cnt = page_cnt + 1
-            form_values = {
-                "ICAJAX" : "1",
-                "ICNAVTYPEDROPDOWN" : "0",
-                "ICType" : "Panel",
-                "ICElementNum" : "0",
-                "ICStateNum" : str(page_cnt),
-                "ICAction" : "HRS_APPL_WRK_HRS_LST_NEXT",
-                "ICXPos" : "0",
-                "ICYPos" : "0",
-                "ResponsetoDiffFrame" : "-1",
-                "TargetFrameName" : "None",
-                "FacePath" : "None",
-                "ICFocus" : "",
-                "ICSaveWarningFilter" : "0",
-                "ICChanged" : "-1",
-                "ICResubmit" : "0",
-                "ICSID" : parser.data['ICSID'],
-                "ICActionPrompt" : "false",
-                "ICFind" : "",
-                "ICAddCount" : "",
-                "ICAPPCLSDATA" : "",
-                "HRS_CE_JO_EXT_I$hnewpers$0":parser.data['hnewper'],
-                "HRS_APP_SRCHDRV_HRS_APP_KEYWORD" : "",
-                "HRS_APP_SRCHDRV_HRS_POSTED_WTN" : "M",
-                "HRS_APPL_WRK_HRS_OPRNAME" : "",
-                "HRS_APPL_WRK_HRS_OPRPSWD" : "",
-                "SEELCT$chk$0":"N", 
-                "SEELCT$chk$1":"N",
-                "SEELCT$chk$2":"N",
-                "SEELCT$chk$3":"N",
-                "SEELCT$chk$4":"N"
-            }
+            form_values['ICStateNum'] = str(page_cnt)
+            form_values['ICAction'] = 'HRS_APPL_WRK_HRS_LST_NEXT' 
             #print "ICSID :".format(parser.data['ICSID'])
             #print "DATA: {0}".format(form_values)
             data = urllib.urlencode(form_values)
@@ -219,6 +270,50 @@ def main(argv):
             parser.hasNext = False
             parser.feed(html)
             #print "HasNext {0}".format(parser.hasNext)
+
+            pt_cnt = 0
+            for ind in range(obj_index, len(parser.data['jobs'])):
+                page_cnt = page_cnt + 1
+                form_values['ICStateNum'] = str(page_cnt)
+                form_values['ICAction'] =  'POSTINGTITLE$' + str(pt_cnt)
+                pt_cnt = pt_cnt + 1
+                obj_index = obj_index + 1
+                 
+                data = urllib.urlencode(form_values)
+                #print "Referrer: {0}".format(parser.data['posting_page_src'])
+                request = urllib2.Request(url=parser.data['form_action'], data=data)
+                request.add_header('Referer', parser.data['posting_page_src'])
+                request.add_header('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1700.77 Safari/537.36')
+                request.add_header('Content-Type', 'application/x-www-form-urlencoded')
+                request.add_header('Host', 'zhr-candidate.shared.utsystem.edu')
+                request.add_header('Origin', 'https://zhr-candidate.shared.utsystem.edu')
+                request.add_header('Connection', 'keep-alive')
+                request.add_header('Accept','*/*')
+                response = urllib2.urlopen(request)
+                det_html = response.read()
+                tree = ET.fromstring(det_html)
+                fields=tree.findall('FIELD')
+                for field in fields:
+                    if field.attrib['id'] == 'win0divPAGECONTAINER':
+                        parser.data['jobs'][ind]['details_html'] = field.text
+                        dets = open(parser.data['jobs'][ind]['job_id'] + '_details.html', 'w')
+                        dets.write(field.text.encode('UTF-8'))
+                        dets.close()
+                                
+                page_cnt = page_cnt + 1
+                form_values['ICStateNum'] = str(page_cnt)
+                form_values['ICAction'] = 'HRS_CE_WRK2_HRS_REF_JB_RETURN'
+                data = urllib.urlencode(form_values)
+                #print "Referrer: {0}".format(parser.data['posting_page_src'])
+                request = urllib2.Request(url=parser.data['form_action'], data=data)
+                request.add_header('Referer', parser.data['posting_page_src'])
+                request.add_header('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1700.77 Safari/537.36')
+                request.add_header('Content-Type', 'application/x-www-form-urlencoded')
+                request.add_header('Host', 'zhr-candidate.shared.utsystem.edu')
+                request.add_header('Origin', 'https://zhr-candidate.shared.utsystem.edu')
+                request.add_header('Connection', 'keep-alive')
+                request.add_header('Accept','*/*')
+                response = urllib2.urlopen(request)
          
         #Write the new listings to the file.
         f = open('/home/theusbar/utrg_jobs/job_listing.json', 'w')
