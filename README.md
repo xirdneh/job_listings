@@ -1,7 +1,7 @@
 #Scraper
 This script scrapes some job listings, personal use only.<br>
+<h3>TODO:</h3>
 <p>
-TODO:
     Clean up the code.<br>
     Create settings.json file or could be some other format.<br>
     Modularize code.<br>
